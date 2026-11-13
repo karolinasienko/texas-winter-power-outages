@@ -1,0 +1,16 @@
+---
+title: "EDS 223: Homework Assignment 4"
+subtitle: "Texas Winter 2021 Power Outages"
+author: "Karolina Sienko"
+date: last-modified
+format:
+ pdf:
+  toc: false
+  code-fold: false
+execute:
+ echo: true
+ warning: false
+ message: false
+ results: hide
+---
+

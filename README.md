@@ -1,2 +1,2 @@
-# texas-winter-power-outages
-EDS223 Homework 4 - Identifying the impacts of extreme weather
+# Identifying the Impacts of Texas' Winter 2021 Storm
+
