@@ -14,3 +14,64 @@ execute:
  results: hide
 ---
 
+
+# 1. Load in libraries
+```{r}
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(sf)
+library(terra) # raster handling
+library(tmap) # map making
+library(stars)
+```
+
+
+# 2. Load in and prepare data
+```{r}
+#| message: false
+#| results: hide
+
+# Load night lights data (rasters)
+# maybe use read_stars()
+feb_7_h5 <- read_stars("data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif")
+feb_7_h6 <- read_stars("data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif")
+feb_16_h5 <- read_stars("data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif")
+feb_16_h6 <- read_stars("data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif")
+
+# Load roads data
+# Query for just highways
+roads_query <- "SELECT * FROM gis_osm_roads_free_1 WHERE fclass='motorway'"
+# Reading in highways data
+highways <- st_read("data/gis_osm_roads_free_1.gpkg", query=roads_query) # vector
+
+# Load houses data
+# Query for certain buildings
+houses_query <- "SELECT *
+FROM gis_osm_buildings_a_free_1
+WHERE (type IS NULL AND name IS NULL)
+OR type in ('residential', 'apartments', 'house', 'static_caravan', 'detached')"
+# Reading in houses data
+houses <- st_read("data/gis_osm_buildings_a_free_1.gpkg", query=houses_query) # vector
+```
+
+## Checking if CRSs match
+```{r}
+st_crs(highway) == st_crs(houses) # true
+st_crs(feb_16_h6) == st_crs(houses)
+st_crs(feb_16_h6) == st_crs(roads)
+st_crs(feb_7_h6) == st_crs(houses)
+st_crs(feb_7_h6) == st_crs(roads)
+st_crs(feb_7_h6) == st_crs(feb_16_h6)
+```
+
+
+## Data Merging
+
+Houston lies on the border of two tiles. Need to combine these two tiles together to get one raster for each date (2021-02-07 and 2021-02-16).
+```{r}
+houston_feb_7 <- st_mosaic(feb_7_h5, feb_7_h6)
+houston_feb_16 <- st_mosaic(feb_16_h5, feb_16_h6)
+```
+
