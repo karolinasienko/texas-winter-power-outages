@@ -75,3 +75,48 @@ houston_feb_7 <- st_mosaic(feb_7_h5, feb_7_h6)
 houston_feb_16 <- st_mosaic(feb_16_h5, feb_16_h6)
 ```
 
+
+## Create blackout mask
+```{r}
+# Find the change in night lights intensity caused by the storm
+night_light_diff <- rast(houston_feb_7) - rast(houston_feb_16)
+
+# Reclassify the difference raster, assuming that any location that experienced a drop of more than 200 nW cm^-2 sr^-1 experienced a blackout
+
+# Create reclassification matrix
+rcl <- matrix(c(
+          -Inf, 200, 0, # 0 means no blackout
+          200, Inf, 1 # 1 means blackout
+          ),
+          ncol = 3, byrow = TRUE)
+
+# Use reclassification to reclassify elevation
+reclass_lights <- classify(night_light_diff, rcl = rcl)
+summary(reclass_lights)
+
+# Assign NA to locations without blackouts
+blackout_mask <- ifel(reclass_lights == 0, NA, 1)
+
+# Convert raster to polygons
+blackout_mask_vect <- as.polygons(blackout_mask, na.rm = TRUE)
+
+# Convert polygons to sf
+blackout_mask_vect <- st_as_sf(blackout_mask_vect)
+
+# Crop to Houston area
+# Crop to Houston area
+houston_bbox <- st_bbox(c(
+  xmin = -96.5,
+  ymin = 29,
+  xmax = -94.5,
+  ymax = 30.5
+), crs = st_crs(blackout_mask_vect))
+
+houston_blackout <- st_make_valid(
+  st_crop(blackout_mask_vect, houston_bbox)
+)
+
+# re-projecting blackout to EPSG:3083
+houston_reproject <- st_transform(houston_blackout, crs = "EPSG:3083")
+
+```
