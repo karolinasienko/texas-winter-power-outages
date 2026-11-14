@@ -120,3 +120,21 @@ houston_blackout <- st_make_valid(
 houston_reproject <- st_transform(houston_blackout, crs = "EPSG:3083")
 
 ```
+
+
+## Exclude highways from the cropped blackout mask
+```{r}
+# Transforming CRS to match
+highways <- st_transform(highways, crs = "EPSG:3083")
+
+# Creating a 200m buffer
+highways_buffer <- st_buffer(highways, dist = 200)
+
+# Combining buffers
+highway_buffer_union <- st_union(highways_buffer)
+
+# Excluding highways
+blackout_no_highways <- st_difference(houston_reproject, highway_buffer_union)
+```
+
+
