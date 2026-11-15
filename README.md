@@ -1,5 +1,10 @@
 # Identifying the Impacts of Texas' Winter 2021 Storm
 
+![Texas storm](images/texas_storm.webp)
+<p align="center">
+  <a href="https://www.npr.org/2026/02/13/nx-s1-5699421/texas-ice-storm-outages-power-electricity">Texas storm</a>
+</p>
+
 
 ## Purpose of this Repository
 This repository is for Homework 4 for EDS 223: Geospatial Analysis & Remote Sensing. The analysis studies the major power crisis that Texas suffered in February 2021 after a series of three severe winter storms that happened on February 10-11, 13-17, and 15-20. We identify the impacts these storms had on the Houston metropolitan area. The outputs are a set of maps comparing night light intensities before and after the first two storms, an estimate of the number of homes in Houston that lost power, and a map of these homes. 
@@ -67,6 +72,7 @@ Data file:
 
 ## Authors
 Author: [Karolina Sienko](https://github.com/karolinasienko)
+
 Contributor: [Annie Adams](https://github.com/annieradams)
 
 
