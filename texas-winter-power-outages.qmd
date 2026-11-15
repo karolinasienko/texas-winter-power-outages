@@ -58,25 +58,77 @@ houses <- st_read("data/gis_osm_buildings_a_free_1.gpkg", query=houses_query) # 
 
 ## Checking if CRSs match
 ```{r}
-st_crs(highway) == st_crs(houses) # true
+st_crs(highways) == st_crs(houses) # true
 st_crs(feb_16_h6) == st_crs(houses)
-st_crs(feb_16_h6) == st_crs(roads)
+st_crs(feb_16_h6) == st_crs(highways)
 st_crs(feb_7_h6) == st_crs(houses)
-st_crs(feb_7_h6) == st_crs(roads)
+st_crs(feb_7_h6) == st_crs(highways)
 st_crs(feb_7_h6) == st_crs(feb_16_h6)
 ```
 
 
 ## Data Merging
 
-Houston lies on the border of two tiles. Need to combine these two tiles together to get one raster for each date (2021-02-07 and 2021-02-16).
+Houston lies on the border of two tiles. We need to combine these two tiles together to get one raster for each date (2021-02-07 and 2021-02-16).
+
 ```{r}
 houston_feb_7 <- st_mosaic(feb_7_h5, feb_7_h6)
 houston_feb_16 <- st_mosaic(feb_16_h5, feb_16_h6)
 ```
 
 
+
+
+## Comparing night light intensities before and after the first two storms
+
+```{r}
+
+# Crop to Houston area
+houston_bbox <- st_bbox(c(
+  xmin = -96.5,
+  ymin = 29,
+  xmax = -94.5,
+  ymax = 30.5
+), crs = st_crs(houston_feb_7))
+
+pre_storm <- st_crop(houston_feb_7, houston_bbox)
+post_storm <- st_crop(houston_feb_16, houston_bbox)
+
+# Need to mask unrealistic values for mapping
+masked_pre <- pre_storm
+masked_pre[(masked_pre > 1000) | (masked_pre <= 0)] <- NA
+
+masked_post <- post_storm
+masked_post[(masked_post > 1000) | (masked_post <= 0)] <- NA
+
+# Combine for side-by-side comparison
+combined_crop <- c(masked_pre, masked_post)
+names(combined_crop) <- c("February 7, 2021 (Before)", "February 16, 2021 (After)")
+```
+
+```{r}
+tm_shape(combined_crop) +
+   tm_raster(
+    col.legend = tm_legend(title = "Light Intensity (nW cm⁻² sr⁻¹)"),
+    col.scale = tm_scale(values = "inferno")
+  ) +
+    tm_facets(ncol = 2, free.scales = FALSE) +
+    tm_title("Houston Night Lights Before and After the Storm") +
+    tm_layout(legend.outside = TRUE,
+              legend.outside.position = "right",
+              legend.outside.size = 0.12,
+              panel.labels = c("February 7 (Before)", "February 16 (After)")
+  ) +
+    tm_graticules(lwd = 0.4, col = "white", alpha = 0.3, labels.size = 0.5, n.x = 5, n.y = 5)
+```
+
+
+
+
 ## Create blackout mask
+
+To identify places that experienced a blackout, we need to create a “mask” that indicates for each cell whether or not it experienced a blackout.
+
 ```{r}
 # Find the change in night lights intensity caused by the storm
 night_light_diff <- rast(houston_feb_7) - rast(houston_feb_16)
@@ -103,38 +155,67 @@ blackout_mask_vect <- as.polygons(blackout_mask, na.rm = TRUE)
 # Convert polygons to sf
 blackout_mask_vect <- st_as_sf(blackout_mask_vect)
 
-# Crop to Houston area
-# Crop to Houston area
-houston_bbox <- st_bbox(c(
-  xmin = -96.5,
-  ymin = 29,
-  xmax = -94.5,
-  ymax = 30.5
-), crs = st_crs(blackout_mask_vect))
-
+# Making geometries valid
 houston_blackout <- st_make_valid(
   st_crop(blackout_mask_vect, houston_bbox)
 )
 
-# re-projecting blackout to EPSG:3083
+# Re-projecting blackout to EPSG:3083
 houston_reproject <- st_transform(houston_blackout, crs = "EPSG:3083")
 
 ```
 
 
 ## Exclude highways from the cropped blackout mask
+
+Highways may have experienced changes in their night light intensities that are unrelated to the storm. Therefore, we should excluded any locations within 200 meters of all highways in the Houston area.
+
 ```{r}
 # Transforming CRS to match
 highways <- st_transform(highways, crs = "EPSG:3083")
 
 # Creating a 200m buffer
-highways_buffer <- st_buffer(highways, dist = 200)
-
-# Combining buffers
-highway_buffer_union <- st_union(highways_buffer)
+highways_buffer <- highways |> 
+  st_union() |> 
+  st_buffer(dist = 200)
 
 # Excluding highways
-blackout_no_highways <- st_difference(houston_reproject, highway_buffer_union)
+blackout_no_highways <- st_difference(houston_reproject, highways_buffer)
 ```
 
 
+## Identify the number of homes likely impacted by blackouts
+```{r}
+
+### TAKES AWHILE TO RUN
+
+houses <- st_transform(houses, crs = "EPSG:3083")
+
+blackout_houses <- houses |> 
+  st_filter(blackout_no_highways)
+
+n_blackout_houses <- nrow(blackout_houses) # 157408 houses
+```
+
+There were 157,408 houses that were likely impacted by the blackouts.
+
+
+
+## A map of the number of homes in Houston that lost power
+```{r}
+
+#"CartoDB.VoyagerNoLabels"
+tm_basemap("OpenStreetMap") +
+  # tm_shape(houses) +
+  # tm_dots(fill = 'dodgerblue', size = 0.01, fill_alpha = 0.3) +
+  # tm_shape(highways) +
+  # tm_lines(col = "black", lwd = 0.8) +
+
+  tm_shape(blackout_houses) +
+  tm_polygons(size = 0.01, fill_alpha = 0.3) +
+
+  tm_add_legend(labels = 'Blackout Areas', position = c("bottom", "right")) +
+  tm_scalebar(position = c("bottom", "left")) +
+  tm_compass(position = c("top", "right")) +
+  tm_title("Houston Homes That Experienced Power Outages")
+```
