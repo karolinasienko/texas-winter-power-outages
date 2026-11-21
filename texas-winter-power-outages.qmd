@@ -35,16 +35,20 @@ library(stars) # spatiotemporal array
 
 # Load night lights data (rasters)
 # maybe use read_stars()
-feb_7_h5 <- read_stars("data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif")
-feb_7_h6 <- read_stars("data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif")
-feb_16_h5 <- read_stars("data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif")
-feb_16_h6 <- read_stars("data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif")
+feb_7_h5 <- 
+  read_stars("data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif")
+feb_7_h6 <- 
+  read_stars("data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif")
+feb_16_h5 <- 
+  read_stars("data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif")
+feb_16_h6 <- 
+  read_stars("data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif")
 
 # Load roads data
 # Query for just highways
 roads_query <- "SELECT * FROM gis_osm_roads_free_1 WHERE fclass='motorway'"
 # Reading in highways data
-highways <- st_read("data/gis_osm_roads_free_1.gpkg", query=roads_query) # vector
+highways <- st_read("data/gis_osm_roads_free_1.gpkg", query=roads_query)
 
 # Load houses data
 # Query for certain buildings
@@ -53,7 +57,7 @@ FROM gis_osm_buildings_a_free_1
 WHERE (type IS NULL AND name IS NULL)
 OR type in ('residential', 'apartments', 'house', 'static_caravan', 'detached')"
 # Reading in houses data
-houses <- st_read("data/gis_osm_buildings_a_free_1.gpkg", query=houses_query) # vector
+houses <- st_read("data/gis_osm_buildings_a_free_1.gpkg", query=houses_query)
 ```
 
 ## Transform Data to Match CRS'
@@ -107,7 +111,8 @@ masked_post[(masked_post > 1000) | (masked_post <= 0)] <- NA
 
 # Combine for side-by-side comparison
 combined_crop <- c(masked_pre, masked_post)
-names(combined_crop) <- c("February 7, 2021 (Pre-Storm)", "February 16, 2021 (Post-Storm)")
+names(combined_crop) <- 
+  c("February 7, 2021 (Pre-Storm)", "February 16, 2021 (Post-Storm)")
 ```
 
 ## Map of Night Lights Intensity Pre-Storm
@@ -125,7 +130,12 @@ tm_shape(combined_crop) +
               legend.outside.size = 0.12,
               panel.labels = c("February 7 (Before)", "February 16 (After)")
   ) +
-    tm_graticules(lwd = 0.4, col = "white", alpha = 0.3, labels.size = 0.5, n.x = 5, n.y = 5)
+    tm_graticules(lwd = 0.4, 
+                  col = "white", 
+                  alpha = 0.3, 
+                  labels.size = 0.5, 
+                  n.x = 5, 
+                  n.y = 5)
 ```
 
 
@@ -228,5 +238,7 @@ tm_basemap("OpenStreetMap") +
 # Add title
   tm_title("Houston Homes That Experienced Power Outages")
 ```
+
+#### Reflection
 
 Comparing VIIRS night lights intensity from February 7 and February 16, 2021 shows a widespread decrease in light intensity across Houston following the winter storms. After applying a threshold of 200 nW cm⁻² sr⁻¹ to identify areas with substantial light reductions and excluding areas within 200 m of highways, an estimated 157,408 homes were affected by the power outages. However, the estimate has several limitations. The light reduction threshold is a bit arbitrary, and using only two cloud-free dates limits the ability to capture the full extent and duration of outages. The coarse spatial resolution also means entire raster cells are classified as blackout areas, potentially overestimating impacts. Additionally, OpenStreetMap building data may be incomplete or incorrectly classified, and the analysis doesn't consider how outages disproportionately affected different socioeconomic groups.
