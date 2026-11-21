@@ -20,11 +20,11 @@ execute:
 #| message: false
 #| warning: false
 
-library(tidyverse)
-library(sf)
+library(tidyverse) # data manipulation and visualization
+library(sf) # spatial data handling
 library(terra) # raster handling
 library(tmap) # map making
-library(stars)
+library(stars) # spatiotemporal array
 ```
 
 
@@ -56,34 +56,37 @@ OR type in ('residential', 'apartments', 'house', 'static_caravan', 'detached')"
 houses <- st_read("data/gis_osm_buildings_a_free_1.gpkg", query=houses_query) # vector
 ```
 
-## Checking if CRSs match
+## Transform Data to Match CRS'
 ```{r}
-st_crs(highways) == st_crs(houses) # true
-st_crs(feb_16_h6) == st_crs(houses)
-st_crs(feb_16_h6) == st_crs(highways)
-st_crs(feb_7_h6) == st_crs(houses)
-st_crs(feb_7_h6) == st_crs(highways)
-st_crs(feb_7_h6) == st_crs(feb_16_h6)
+# Transform CRS'
+highways <- st_transform(highways, crs = 3083)
+houses <- st_transform(houses, crs = 3083)
+
+# Run conditional to make sure transform worked
+if (st_crs(highways) != st_crs(houses)) {
+  warning(
+    "Highways and houses have different CRS"
+  )
+}
+
+# Verify CRSs' match
+st_crs(highways) == st_crs(houses)
 ```
 
 
 ## Data Merging
-
-Houston lies on the border of two tiles. We need to combine these two tiles together to get one raster for each date (2021-02-07 and 2021-02-16).
-
 ```{r}
+# Combining two Houston tiles to get one raster for each date
 houston_feb_7 <- st_mosaic(feb_7_h5, feb_7_h6)
 houston_feb_16 <- st_mosaic(feb_16_h5, feb_16_h6)
 ```
 
 
 
-
-## Comparing night light intensities before and after the first two storms
-
+## Comparing Night Light Intensities (Pre- and Post-Storm)
+#### Data Preparation
 ```{r}
-
-# Crop to Houston area
+# Houston bounding box
 houston_bbox <- st_bbox(c(
   xmin = -96.5,
   ymin = 29,
@@ -91,10 +94,11 @@ houston_bbox <- st_bbox(c(
   ymax = 30.5
 ), crs = st_crs(houston_feb_7))
 
+# Clip extent of the raster layers
 pre_storm <- st_crop(houston_feb_7, houston_bbox)
 post_storm <- st_crop(houston_feb_16, houston_bbox)
 
-# Need to mask unrealistic values for mapping
+# Mask unrealistic values for mapping
 masked_pre <- pre_storm
 masked_pre[(masked_pre > 1000) | (masked_pre <= 0)] <- NA
 
@@ -103,16 +107,18 @@ masked_post[(masked_post > 1000) | (masked_post <= 0)] <- NA
 
 # Combine for side-by-side comparison
 combined_crop <- c(masked_pre, masked_post)
-names(combined_crop) <- c("February 7, 2021 (Before)", "February 16, 2021 (After)")
+names(combined_crop) <- c("February 7, 2021 (Pre-Storm)", "February 16, 2021 (Post-Storm)")
 ```
 
+## Map of Night Lights Intensity Pre-Storm
 ```{r}
+# Map the combined tiles
 tm_shape(combined_crop) +
    tm_raster(
     col.legend = tm_legend(title = "Light Intensity (nW cm⁻² sr⁻¹)"),
     col.scale = tm_scale(values = "inferno")
   ) +
-    tm_facets(ncol = 2, free.scales = FALSE) +
+    tm_facets(ncol = 2, free.scales = FALSE) + # compare tiles side-by-side
     tm_title("Houston Night Lights Before and After the Storm") +
     tm_layout(legend.outside = TRUE,
               legend.outside.position = "right",
@@ -123,26 +129,20 @@ tm_shape(combined_crop) +
 ```
 
 
-
-
-## Create blackout mask
-
-To identify places that experienced a blackout, we need to create a “mask” that indicates for each cell whether or not it experienced a blackout.
-
+## Create Blackout Mask
+#### Reclassify the Cells
 ```{r}
 # Find the change in night lights intensity caused by the storm
 night_light_diff <- rast(houston_feb_7) - rast(houston_feb_16)
 
-# Reclassify the difference raster, assuming that any location that experienced a drop of more than 200 nW cm^-2 sr^-1 experienced a blackout
-
-# Create reclassification matrix
+# Reclassify the cells and drop any less than 200 nW cm^-2 sr^-1
 rcl <- matrix(c(
           -Inf, 200, 0, # 0 means no blackout
           200, Inf, 1 # 1 means blackout
           ),
           ncol = 3, byrow = TRUE)
 
-# Use reclassification to reclassify elevation
+# Use reclassification matrix to reclassify elevation
 reclass_lights <- classify(night_light_diff, rcl = rcl)
 summary(reclass_lights)
 
@@ -155,67 +155,78 @@ blackout_mask_vect <- as.polygons(blackout_mask, na.rm = TRUE)
 # Convert polygons to sf
 blackout_mask_vect <- st_as_sf(blackout_mask_vect)
 
-# Making geometries valid
+# Make geometries valid
 houston_blackout <- st_make_valid(
   st_crop(blackout_mask_vect, houston_bbox)
 )
 
-# Re-projecting blackout to EPSG:3083
+# Re-project blackout to EPSG:3083
 houston_reproject <- st_transform(houston_blackout, crs = "EPSG:3083")
-
 ```
 
 
-## Exclude highways from the cropped blackout mask
+#### Verify CRS'
+```{r}
+# Make sure houses matches Houston CRS
+if (st_crs(houston_reproject) != st_crs(houses)) {
+  stop("Update CRSs so they match!")
+}
 
-Highways may have experienced changes in their night light intensities that are unrelated to the storm. Therefore, we should excluded any locations within 200 meters of all highways in the Houston area.
+# Make sure highways matches Houston CRS
+if (st_crs(houston_reproject) != st_crs(highways)) {
+  stop("Update CRSs so they match!")
+}
 
+# Verify CRS' match
+st_crs(houston_reproject) == st_crs(houses)
+st_crs(houston_reproject) == st_crs(highways)
+```
+
+
+#### Exclude Highways from the Cropped Blackout Mask
 ```{r}
 # Transforming CRS to match
-highways <- st_transform(highways, crs = "EPSG:3083")
+#highways <- st_transform(highways, crs = "EPSG:3083")
 
 # Creating a 200m buffer
 highways_buffer <- highways |> 
   st_union() |> 
   st_buffer(dist = 200)
 
-# Excluding highways
+# Remove highway buffers from blackout areas
 blackout_no_highways <- st_difference(houston_reproject, highways_buffer)
 ```
 
 
-## Identify the number of homes likely impacted by blackouts
+#### Identify Number of Homes Likely Impacted by Blackouts
 ```{r}
-
-### TAKES AWHILE TO RUN
-
-houses <- st_transform(houses, crs = "EPSG:3083")
-
-blackout_houses <- houses |> 
+# Filter the houses that relate to blackout area
+blackout_houses <- st_transform(houses, crs = "EPSG:3083") |> 
   st_filter(blackout_no_highways)
 
+# Houses affected by blackout
 n_blackout_houses <- nrow(blackout_houses) # 157408 houses
 ```
 
 There were 157,408 houses that were likely impacted by the blackouts.
 
 
-
-## A map of the number of homes in Houston that lost power
+## Map of Houston Homes That Lost Power
 ```{r}
-
-#"CartoDB.VoyagerNoLabels"
 tm_basemap("OpenStreetMap") +
-  # tm_shape(houses) +
-  # tm_dots(fill = 'dodgerblue', size = 0.01, fill_alpha = 0.3) +
-  # tm_shape(highways) +
-  # tm_lines(col = "black", lwd = 0.8) +
-
+  # Homes where power was lost
   tm_shape(blackout_houses) +
   tm_polygons(size = 0.01, fill_alpha = 0.3) +
 
+  # Add legend
   tm_add_legend(labels = 'Blackout Areas', position = c("bottom", "right")) +
+
+  # Add scalebar and compass
   tm_scalebar(position = c("bottom", "left")) +
   tm_compass(position = c("top", "right")) +
+
+# Add title
   tm_title("Houston Homes That Experienced Power Outages")
 ```
+
+Comparing VIIRS night lights intensity from February 7 and February 16, 2021 shows a widespread decrease in light intensity across Houston following the winter storms. After applying a threshold of 200 nW cm⁻² sr⁻¹ to identify areas with substantial light reductions and excluding areas within 200 m of highways, an estimated 157,408 homes were affected by the power outages. However, the estimate has several limitations. The light reduction threshold is a bit arbitrary, and using only two cloud-free dates limits the ability to capture the full extent and duration of outages. The coarse spatial resolution also means entire raster cells are classified as blackout areas, potentially overestimating impacts. Additionally, OpenStreetMap building data may be incomplete or incorrectly classified, and the analysis doesn't consider how outages disproportionately affected different socioeconomic groups.
